@@ -27,5 +27,17 @@ class DatabaseRepository {
             $inc: { __v: 1 }
         }, options);
     }
+    ;
+    async findByIdAndUpdate({ id, update, options = { new: true } }) {
+        return await this.model.findByIdAndUpdate(id, {
+            ...update,
+            $inc: { __v: 1 }
+        }, options);
+    }
+    ;
+    async deleteOne({ filter, }) {
+        return await this.model.deleteOne(filter);
+    }
+    ;
 }
 exports.DatabaseRepository = DatabaseRepository;

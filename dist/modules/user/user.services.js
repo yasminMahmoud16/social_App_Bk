@@ -3,21 +3,78 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const token_security_1 = require("../../utils/security/token.security");
 const User_model_1 = require("../../Db/model/User.model");
 const user_repository_1 = require("../../Db/repository/user.repository.");
-const token_model_1 = require("../../Db/model/token.model");
-const token_repository_1 = require("../../Db/repository/token.repository");
 const error_response_1 = require("../../utils/response/error.response");
 const hash_security_1 = require("../../utils/security/hash.security");
-const email_event_1 = require("../../utils/events/email.event");
+const email_event_1 = require("../../utils/email/email.event");
 const otp_1 = require("../../utils/otp/otp");
+const s3_config_1 = require("../../utils/multer/s3.config");
+const s3_event_1 = require("../../utils/multer/s3.event");
+const success_response_1 = require("../../utils/response/success.response");
 class UserServices {
     userModel = new user_repository_1.UserRepository(User_model_1.UserModel);
-    tokenModel = new token_repository_1.TokenRepository(token_model_1.TokenModel);
     constructor() { }
     profile = async (req, res) => {
-        return res.status(200).json({
-            message: "user profile",
-            user: req.user,
-            decoded: req.decoded?.iat
+        if (!req.user) {
+            throw new error_response_1.UnauthorizeException("missing user details ");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+            data: { user: req.user }
+        });
+    };
+    profileImage = async (req, res) => {
+        const { ContentType, Originalname } = req.body;
+        const { url, Key } = await (0, s3_config_1.createPreSignedUploadLink)({
+            ContentType,
+            Originalname,
+            path: `users/${req.decoded?._id}`
+        });
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id,
+            update: {
+                profileImage: Key,
+                tempProfileImage: req.user?.profileImage
+            }
+        });
+        if (!user) {
+            throw new error_response_1.BadRequestException("failed to update profile image");
+        }
+        ;
+        s3_event_1.s3Event.emit("trackProfileImageUpload", {
+            userId: req.user?._id,
+            oldKey: req.user?.profileImage,
+            Key,
+            expiresIn: 30000
+        });
+        return (0, success_response_1.successResponse)({
+            res,
+            message: "image uploaded",
+            data: { url }
+        });
+    };
+    profileCoverImages = async (req, res) => {
+        const urls = await (0, s3_config_1.uploadFiles)({
+            files: req.files,
+            path: `users/${req.decoded?._id}/cover`,
+            useLarge: true
+        });
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id,
+            update: {
+                coverImages: urls
+            }
+        });
+        if (!user) {
+            throw new error_response_1.BadRequestException("Failed to update profile cover images ");
+        }
+        ;
+        if (req.user?.coverImages) {
+            await (0, s3_config_1.deleteFiles)({ urls: req.user.coverImages });
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+            message: "image uploaded",
+            data: { user }
         });
     };
     shareProfile = async (req, res) => {
@@ -28,9 +85,77 @@ class UserServices {
         if (!user) {
             throw new error_response_1.NotFoundException("User not found");
         }
-        return res.status(200).json({
+        return (0, success_response_1.successResponse)({
+            res,
             message: "user profile",
-            data: { user }
+        });
+    };
+    freezeAccount = async (req, res) => {
+        const { userId } = req.params || {};
+        if (userId && req.user?.role !== User_model_1.RoleEnum.admin) {
+            throw new error_response_1.ForbiddenException("Not authorized user ");
+        }
+        ;
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: userId || req.user?._id,
+                freezedAt: { $exists: false }
+            },
+            update: {
+                freezedAt: new Date(),
+                freezedBy: req.user?._id,
+                changeCredentialTime: new Date(),
+                $unset: {
+                    restoredAt: 1,
+                    restoredBy: 1
+                }
+            }
+        });
+        if (!user.matchedCount) {
+            throw new error_response_1.NotFoundException("User not found or failed to delete this resource");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    restoreAccount = async (req, res) => {
+        const { userId } = req.params;
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: userId,
+                freezedBy: { $ne: userId }
+            },
+            update: {
+                restoredAt: new Date(),
+                restoredBy: req.user?._id,
+                $unset: {
+                    freezedAt: 1,
+                    freezedBy: 1
+                }
+            }
+        });
+        if (!user.matchedCount) {
+            throw new error_response_1.NotFoundException("User not found or failed to restore this resource");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    hardDeleteAccount = async (req, res) => {
+        const { userId } = req.params;
+        const user = await this.userModel.deleteOne({
+            filter: {
+                _id: userId,
+                freezedAt: { $exists: true }
+            }
+        });
+        if (!user.deletedCount) {
+            throw new error_response_1.NotFoundException("User not found or failed to hard delete this resource");
+        }
+        ;
+        await (0, s3_config_1.deleteFolderByPrefix)({ path: `users/${userId}` });
+        return (0, success_response_1.successResponse)({
+            res,
         });
     };
     logout = async (req, res) => {
@@ -53,15 +178,17 @@ class UserServices {
             },
             update,
         });
-        return res.status(statusCode).json({
-            message: "Done",
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode
         });
     };
     refreshToken = async (req, res) => {
         const credentials = await (0, token_security_1.createLoginCredentials)(req.user);
         await (0, token_security_1.createRevokeToken)(req.decoded);
-        return res.status(201).json({
-            message: "Done",
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201,
             data: {
                 credentials
             }
@@ -95,7 +222,11 @@ class UserServices {
             throw new error_response_1.BadRequestException("Failed to update password. Please try again");
         }
         ;
-        return res.status(201).json({ message: 'Password Updated ' });
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201,
+            message: 'Password Updated '
+        });
     };
     updateEmail = async (req, res) => {
         const userId = req.user?.id;
@@ -134,7 +265,11 @@ class UserServices {
         }
         ;
         email_event_1.emailEvent.emit("updateEmail", { to: newEmail, otp });
-        return res.status(201).json({ message: 'Email Updated ' });
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201,
+            message: 'Email Updated '
+        });
     };
     confirmUpdatedEmail = async (req, res) => {
         let { email, otp } = req.body;
@@ -163,7 +298,10 @@ class UserServices {
                 },
             }
         });
-        return res.status(200).json({ message: 'Email confirmed' });
+        return (0, success_response_1.successResponse)({
+            res,
+            message: 'Email confirmed'
+        });
     };
 }
 ;

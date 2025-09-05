@@ -6,5 +6,7 @@ exports.endPoints = {
     profile: [
         User_model_1.RoleEnum.user,
         User_model_1.RoleEnum.admin
-    ]
+    ],
+    restore: [User_model_1.RoleEnum.admin],
+    hardDelete: [User_model_1.RoleEnum.admin]
 };

@@ -1,6 +1,7 @@
 import {z} from "zod"
 import { LogoutEnum } from "../../utils/security/token.security"
 import { generalFields } from "../../middleware/validation.middleware";
+import { Types } from "mongoose";
 
 
 export const logout = {
@@ -45,3 +46,29 @@ export const confirmUpdateEmail = {
 
 
 
+export const freezeAccount = {
+  params: z.object(
+    {
+      userId: z.string().optional()
+    }
+  ).optional().refine((data) => {
+    return data?.userId ? Types.ObjectId.isValid(data.userId) : true
+  }, {
+    error: "In-valid object formate",
+    path: ['userId']
+  }),
+};
+export const restoreAccount = {
+  params: z.object(
+    {
+      userId: z.string()
+    }
+  ).refine((data) => {
+    return  Types.ObjectId.isValid(data.userId)
+  }, {
+    error: "In-valid object formate",
+    path:['userId']
+  }),
+}
+
+export const hardDeleteAccount= restoreAccount

@@ -7,6 +7,7 @@ const connectDb =async ():Promise<void> => {
         const result = await connect(process.env.DB_URI as string, {
             serverSelectionTimeoutMS:30000
         });
+        
         await UserModel.syncIndexes()
         log(result.models);
         log("DB Connected Successfully 🚀🚀");

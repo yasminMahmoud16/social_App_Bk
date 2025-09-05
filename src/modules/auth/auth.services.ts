@@ -8,7 +8,9 @@ import { compareHash, generateHash } from "../../utils/security/hash.security";
 import { generateNumberOtp } from "../../utils/otp/otp";
 import { createLoginCredentials } from "../../utils/security/token.security";
 import { OAuth2Client, type TokenPayload } from 'google-auth-library';
-import { emailEvent } from "../../utils/events/email.event";
+import { emailEvent } from "../../utils/email/email.event";
+import { successResponse } from "../../utils/response/success.response";
+import { ILoginResponse } from "./auth.entities";
 
 
 
@@ -60,7 +62,8 @@ class AuthenticationServices {
         });
 
         emailEvent.emit("confirmEmail", { to: email, otp })
-        return res.status(201).json({ message: 'signup', data: { user } })
+        return successResponse({ res, statusCode: 201 })
+        // return res.status(201).json({ message: 'signup', data: { user } })
     }
     confirmEmail = async (req: Request, res: Response): Promise<Response> => {
         let { email, otp }: IConfirmEmailInputDto = req.body;
@@ -93,7 +96,7 @@ class AuthenticationServices {
         })
 
 
-        return res.status(200).json({ message: 'Email confirmed' })
+        return successResponse({ res, message: 'Email confirmed' })
     }
     login = async (req: Request, res: Response): Promise<Response> => {
         let { email, password }: ILoginBodyInputDto = req.body;
@@ -119,14 +122,18 @@ class AuthenticationServices {
 
         const credentials = await createLoginCredentials(user)
 
-        return res.status(200).json({ message: 'User logged', data: { Credentials: { credentials } } })
+
+        return successResponse<ILoginResponse>({
+            res, message: 'User logged',
+            data: { credentials }
+        });
     };
 
 
 
     signupGmail = async (req: Request, res: Response): Promise<Response> => {
         const { idToken }: ISignupWithGmailInputDto = req.body;
-        const { email, family_name, given_name, name, picture }: TokenPayload = await this.verifyGmailSignup(idToken);
+        const { email, family_name, given_name, picture }: TokenPayload = await this.verifyGmailSignup(idToken);
 
         const user = await this.userModel.findOne({
             filter: {
@@ -156,8 +163,11 @@ class AuthenticationServices {
 
         const credentials = await createLoginCredentials(newUser);
 
-        return res.status(201).json({ message: 'User Signup', data: { credentials } });
-
+        return successResponse<ILoginResponse>({
+            res, message: 'User logged',
+            statusCode: 201,
+            data: { credentials }
+        });
     };
     loginGmail = async (req: Request, res: Response): Promise<Response> => {
         const { idToken }: ISignupWithGmailInputDto = req.body;
@@ -178,8 +188,12 @@ class AuthenticationServices {
 
 
         const credentials = await createLoginCredentials(user);
+        return successResponse<ILoginResponse>({
+            res, message: 'User logged',
+            data: { credentials }
+        });
 
-        return res.status(201).json({ message: 'User Signup', data: { credentials } });
+        // return res.status(201).json({ message: 'User Signup', data: { credentials } });
 
     };
     sendForgetCode = async (req: Request, res: Response): Promise<Response> => {
@@ -201,16 +215,18 @@ class AuthenticationServices {
         const result = await this.userModel.updateOne({
             filter: { email },
             update: {
-                resetPasswordOtp: await  generateHash(String(otp)),
+                resetPasswordOtp: await generateHash(String(otp)),
             }
         });
 
-        if(!result.matchedCount){
+        if (!result.matchedCount) {
             throw new BadRequestException("Failed to send code please try again later")
         };
 
         emailEvent.emit("sendForgetCode", { to: email, otp })
-        return res.status(201).json({ message: 'Done' });
+        return successResponse({
+            res,
+        });
 
     };
     verifyForgetCode = async (req: Request, res: Response): Promise<Response> => {
@@ -233,12 +249,15 @@ class AuthenticationServices {
             throw new NotFoundException("In-valid otp code  ")
         };
 
-        return res.status(201).json({ message: 'Done' });
+        return successResponse({
+            res,
+            statusCode: 201
+        });
 
     };
     resetForgetPassword = async (req: Request, res: Response): Promise<Response> => {
 
-        const { email, otp ,password}: IResetForgetPasswordInputDto = req.body;
+        const { email, otp, password }: IResetForgetPasswordInputDto = req.body;
         const user = await this.userModel.findOne({
             filter: {
                 email,
@@ -267,16 +286,19 @@ class AuthenticationServices {
             }
         });
 
-        if(!result.matchedCount){
+        if (!result.matchedCount) {
             throw new BadRequestException("Failed to reset password please try again later")
         };
 
-        
-        return res.status(201).json({ message: 'Done' });
+
+        return successResponse({
+            res,
+            statusCode: 201
+        });
     };
 
 
-    
+
 
 }
 

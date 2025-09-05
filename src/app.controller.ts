@@ -11,14 +11,18 @@ import rateLimit from "express-rate-limit";
 // env config
 import { config } from 'dotenv'
 import {resolve} from 'node:path'
-config({path:resolve('./config/.env.development')})
+config({path:resolve('./src/config/.env.development')})
 
 // modules
 import authController from './modules/auth/auth.controller'
 import userController from './modules/user/user.controller'
-import { globalErrorHandling } from "./utils/response/error.response";
+import { BadRequestException, globalErrorHandling } from "./utils/response/error.response";
 import connectDb from "./Db/connection.db";
-
+import { createGetPreSignedLink, deleteFolderByPrefix, getFile } from "./utils/multer/s3.config";
+// apply async/await on callback  
+import { promisify } from "node:util";
+import { pipeline } from "node:stream";
+const createWriteStreamPip = promisify(pipeline) //return pipeline with async/await 
 // rate limit app
 const limiter = rateLimit({
     windowMs: 60 * 60000,
@@ -47,7 +51,46 @@ const bootstrap = async (): Promise<void> => {
 
     // app sub modules 
     app.use('/auth',authController);
-    app.use('/user',userController);
+    app.use('/user', userController);
+
+
+            app.get('/upload/pre-signed/*path', async (req: Request, res: Response): Promise<Response> => {
+        const { downloadName ,download= "false",expiresIn=120} = req.query as { downloadName?: string, download?:string ,expiresIn?:number};
+                const { path } = req.params as unknown as { path: string[] }
+                console.log({path});
+                
+        const Key = path.join('/')
+
+            const url = await createGetPreSignedLink({
+                Key,
+                downloadName: downloadName as string,
+                download,
+                expiresIn
+            });
+                console.log({url});
+                
+        return res.json({ message: "Done", data: { url } })
+        
+    });
+    app.get('/upload/*path', async (req: Request, res: Response): Promise<void> => {
+        const { downloadName, download = "false" } = req.query as { downloadName?: string, download?: string };
+        const { path } = req.params as unknown as { path: string[] }
+        const Key = path.join('/')
+        const s3Response = await getFile({ Key });
+        console.log(s3Response.Body);
+        if (!s3Response?.Body) {
+            throw new BadRequestException("fail to fetch this asset")
+        }
+        res.setHeader("Content-type", `${s3Response.ContentType || "application/octet-stream"}`);
+        if (download === "true") {
+            
+            res.setHeader("Content-Disposition", `attachment; filename="${downloadName || Key.split("/").pop()}"`); //download
+        }
+        return await createWriteStreamPip(s3Response.Body as NodeJS.ReadableStream, res)
+    });
+
+
+
 
     app.use('{/*dummy}', (req, res) => {
         res.status(404).json({

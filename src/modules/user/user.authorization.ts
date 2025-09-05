@@ -4,5 +4,7 @@ export const endPoints = {
     profile: [
         RoleEnum.user,
         RoleEnum.admin
-    ]
+    ],
+    restore:[RoleEnum.admin],
+    hardDelete:[RoleEnum.admin]
 }

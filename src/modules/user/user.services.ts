@@ -1,30 +1,113 @@
 import { Request, Response } from "express";
-import { IConfirmUpdateEmailInputDto, IUpdateEmailInputDto, ULogoutDto } from "./user.dto";
+import { IConfirmUpdateEmailInputDto, IFreezeAccountDto, IHardDeleteAccountDto, IRestoreAccountDto, IUpdateEmailInputDto, ULogoutDto } from "./user.dto";
 import { createLoginCredentials, createRevokeToken, LogoutEnum } from "../../utils/security/token.security";
-import { UpdateQuery } from "mongoose";
-import { HUserDocument, IUser, ProviderEnum, UserModel } from "../../Db/model/User.model";
+import { Types, UpdateQuery } from "mongoose";
+import { HUserDocument, IUser, ProviderEnum, RoleEnum, UserModel } from "../../Db/model/User.model";
 import { UserRepository } from "../../Db/repository/user.repository.";
-import { TokenModel } from "../../Db/model/token.model";
-import { TokenRepository } from "../../Db/repository/token.repository";
 import { JwtPayload } from "jsonwebtoken";
 import { IUpdatePasswordInputDto } from "../user/user.dto";
-import { BadRequestException, ConflictException, NotFoundException } from "../../utils/response/error.response";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizeException } from "../../utils/response/error.response";
 import { compareHash, generateHash } from "../../utils/security/hash.security";
-import { emailEvent } from "../../utils/events/email.event";
+import { emailEvent } from "../../utils/email/email.event";
 import { generateNumberOtp } from "../../utils/otp/otp";
+import { createPreSignedUploadLink, deleteFiles, deleteFolderByPrefix, uploadFiles } from "../../utils/multer/s3.config";
+import { s3Event } from "../../utils/multer/s3.event";
+import { successResponse } from "../../utils/response/success.response";
+import {  IProfileImageResponse, IUserResponse } from "./user.entities";
+import { ILoginResponse } from "../auth/auth.entities";
 
 class UserServices {
     private userModel = new UserRepository(UserModel);
-    private tokenModel = new TokenRepository(TokenModel);
+    // private tokenModel = new TokenRepository(TokenModel);
     constructor() { }
 
     profile = async (req: Request, res: Response): Promise<Response> => {
 
-        return res.status(200).json({
-            message: "user profile",
-            user: req.user,
-            decoded: req.decoded?.iat
+        // return res.status(200).json({
+        //     message: "user profile",
+        //     user: req.user,
+        //     decoded: req.decoded?.iat
+        // });
+
+        if (!req.user) {
+            throw new UnauthorizeException("missing user details ")
+        }
+        return successResponse<IUserResponse>({
+            res,
+            data:{user:req.user}
+        });
+
+    };
+    profileImage = async (req: Request, res: Response): Promise<Response> => {
+        
+        const { ContentType, Originalname }: { ContentType: string, Originalname: string } = req.body;
+        const { url, Key } = await createPreSignedUploadLink({
+            ContentType,
+            Originalname,
+            path: `users/${req.decoded?._id}`
+        });
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id as Types.ObjectId,
+            update: {
+                profileImage: Key,
+                tempProfileImage:req.user?.profileImage
+            }
+        });
+
+        if (!user) {
+            throw new BadRequestException("failed to update profile image")
+        };
+
+        s3Event.emit("trackProfileImageUpload", {
+            userId: req.user?._id,
+            oldKey: req.user?.profileImage,
+            Key,
+            expiresIn: 30000
         })
+        // return res.status(200).json({
+        //     message: "image uploaded",
+        //     data:{url,  Key}
+        // })
+        return successResponse<IProfileImageResponse>({
+            res,
+            message: "image uploaded",
+            data:{url}
+        });
+
+    };
+    profileCoverImages = async (req: Request, res: Response): Promise<Response> => {
+
+        const urls = await uploadFiles({
+            // if disk change the storageApproach to disk here and in services 
+            files:req.files as Express.Multer.File[],
+            path: `users/${req.decoded?._id}/cover`,
+            useLarge:true
+        });
+
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id as Types.ObjectId,
+            update: {
+                coverImages: urls
+            }
+        });
+
+        if (!user) {
+            throw new BadRequestException("Failed to update profile cover images ");
+        };
+
+        if (req.user?.coverImages) {
+            await deleteFiles({urls:req.user.coverImages})
+            
+        }
+        // return res.status(200).json({
+        //     message: "image uploaded",
+        //     data:{urls}
+        // })
+        return successResponse<IUserResponse>({
+            res,
+            message: "image uploaded",
+            data:{user}
+        });
 
     };
     shareProfile = async (req: Request, res: Response): Promise<Response> => {
@@ -39,11 +122,92 @@ class UserServices {
         }
 
 
-        return res.status(200).json({
+        // return res.status(200).json({
+        //     message: "user profile",
+        //     data: { user }
+        // });
+        return successResponse({
+            res,
             message: "user profile",
-            data: { user }
-        })
 
+        });
+
+    };
+
+
+
+    freezeAccount = async (req: Request, res: Response): Promise<Response> => {
+        const { userId } = (req.params as IFreezeAccountDto) || {};
+        if (userId && req.user?.role !== RoleEnum.admin) {
+            throw new ForbiddenException("Not authorized user ")
+        };
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: userId || req.user?._id,
+                freezedAt: { $exists: false }
+            },
+            update: {
+                freezedAt: new Date(),
+                freezedBy: req.user?._id,
+                changeCredentialTime: new Date(),
+                $unset: {
+                    restoredAt: 1,
+                    restoredBy: 1
+                }
+            }
+
+        });
+        if (!user.matchedCount) {
+            throw new NotFoundException("User not found or failed to delete this resource")
+        }
+        // return res.json({ message: "Done" })
+        return successResponse({
+            res,
+        });
+    };
+    restoreAccount = async (req: Request, res: Response): Promise<Response> => {
+        const { userId } = req.params as IRestoreAccountDto ;
+
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: userId ,
+                freezedBy: { $ne: userId }
+            },
+            update: {
+                restoredAt: new Date(),
+                restoredBy: req.user?._id,
+                $unset: {
+                    freezedAt: 1,
+                    freezedBy: 1
+                }
+            }
+
+        });
+        if (!user.matchedCount) {
+            throw new NotFoundException("User not found or failed to restore this resource")
+        }
+        // return res.json({ message: "Done" })
+        return successResponse({
+            res,
+        });
+    };
+    hardDeleteAccount = async (req: Request, res: Response): Promise<Response> => {
+        const { userId } = req.params as IHardDeleteAccountDto ;
+
+        const user = await this.userModel.deleteOne({
+            filter: {
+                _id: userId ,
+                freezedAt: { $exists: true }
+            }
+
+        });
+        if (!user.deletedCount) {
+            throw new NotFoundException("User not found or failed to hard delete this resource")
+        };
+        await deleteFolderByPrefix({path:`users/${userId}`})
+        return successResponse({
+            res,
+        });
     };
 
     logout = async (req: Request, res: Response): Promise<Response> => {
@@ -69,10 +233,15 @@ class UserServices {
             },
             update,
         })
-        return res.status(statusCode).json({
-            message: "Done",
+        // return res.status(statusCode).json({
+        //     message: "Done",
 
-        })
+        // })
+
+        return successResponse({
+            res,
+            statusCode
+        });
 
     };
 
@@ -81,12 +250,19 @@ class UserServices {
         const credentials = await createLoginCredentials(req.user as HUserDocument);
         await createRevokeToken(req.decoded as JwtPayload);
 
-        return res.status(201).json({
-            message: "Done",
+        // return res.status(201).json({
+        //     message: "Done",
+        //     data: {
+        //         credentials
+        //     }
+        // })
+        return successResponse<ILoginResponse>({
+            res,
+            statusCode: 201,
             data: {
                 credentials
             }
-        })
+        });
 
     };
 
@@ -125,7 +301,12 @@ class UserServices {
         };
 
 
-        return res.status(201).json({ message: 'Password Updated ' });
+        // return res.status(201).json({ message: 'Password Updated ' });
+        return successResponse({
+            res,
+            statusCode: 201,
+            message: 'Password Updated ' 
+        });
     };
     updateEmail = async (req: Request, res: Response): Promise<Response> => {
 
@@ -175,7 +356,12 @@ class UserServices {
 
         emailEvent.emit("updateEmail", { to: newEmail, otp });
 
-        return res.status(201).json({ message: 'Email Updated ' });
+        // return res.status(201).json({ message: 'Email Updated ' });
+        return successResponse({
+            res,
+            statusCode: 201,
+             message: 'Email Updated '
+        });
     };
 
     confirmUpdatedEmail = async (req: Request, res: Response): Promise<Response> => {
@@ -212,7 +398,11 @@ class UserServices {
         })
 
 
-        return res.status(200).json({ message: 'Email confirmed' })
+        // return res.status(200).json({ message: 'Email confirmed' })
+        return successResponse({
+            res,
+            message: 'Email confirmed' 
+        });
     }
 };
 

@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import Mail from "nodemailer/lib/mailer";
-import { sendEmail } from "../email/send.email";
-import { verifyEmail } from "../email/verify.templet.email";
+import { sendEmail } from "./send.email";
+import { verifyEmail } from "./verify.templet.email";
 
 interface IEmail extends Mail.Options{
     otp:number,
