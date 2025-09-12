@@ -13,7 +13,8 @@ export const signup = {
     body: login.body.extend({
         username: generalFields.username,
         confirmPassword: generalFields.confirmPassword,
-        gender:generalFields.gender
+        gender: generalFields.gender,
+        phone:generalFields.phone
 
     }).superRefine((data,ctx) => {
         console.log(data, ctx);
@@ -33,7 +34,7 @@ export const confirmEmail = {
         otp: generalFields.otp
 
     })
-}
+};
 export const signupGmail = {
     body: z.strictObject({
         idToken:z.string(),
@@ -63,3 +64,12 @@ export const resetForgetPassword = {
 }
 
 
+
+
+export const confirmLogin = {
+     body: z.strictObject({
+        email: generalFields.email,
+        loginOtp: generalFields.loginOtp
+
+    })
+}

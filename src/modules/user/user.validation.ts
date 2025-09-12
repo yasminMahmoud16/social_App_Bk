@@ -71,4 +71,12 @@ export const restoreAccount = {
   }),
 }
 
-export const hardDeleteAccount= restoreAccount
+export const hardDeleteAccount = restoreAccount;
+export const verifyTwoStepVerification = confirmUpdateEmail;
+export const updateBasicProfileInfo =  {
+  body: z.strictObject({
+    username: generalFields.username,
+        gender: generalFields.gender,
+        phone:generalFields.phone
+  })
+};

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetForgetPassword = exports.verifyForgetCode = exports.sendForgetCode = exports.signupGmail = exports.confirmEmail = exports.signup = exports.login = void 0;
+exports.confirmLogin = exports.resetForgetPassword = exports.verifyForgetCode = exports.sendForgetCode = exports.signupGmail = exports.confirmEmail = exports.signup = exports.login = void 0;
 const zod_1 = require("zod");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
 exports.login = {
@@ -13,7 +13,8 @@ exports.signup = {
     body: exports.login.body.extend({
         username: validation_middleware_1.generalFields.username,
         confirmPassword: validation_middleware_1.generalFields.confirmPassword,
-        gender: validation_middleware_1.generalFields.gender
+        gender: validation_middleware_1.generalFields.gender,
+        phone: validation_middleware_1.generalFields.phone
     }).superRefine((data, ctx) => {
         console.log(data, ctx);
         if (data.confirmPassword !== data.password) {
@@ -53,4 +54,10 @@ exports.resetForgetPassword = {
     }).refine((data) => {
         return data.password === data.confirmPassword;
     }, { message: "Password mismatch confirm password", path: ["confirmPassword"] })
+};
+exports.confirmLogin = {
+    body: zod_1.z.strictObject({
+        email: validation_middleware_1.generalFields.email,
+        loginOtp: validation_middleware_1.generalFields.loginOtp
+    })
 };

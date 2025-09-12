@@ -8,12 +8,17 @@ router.post(
     '/signup',
     validation(validators.signup),
     authService.signup
-)
+);
 router.patch(
     '/confirm-email',
     validation(validators.confirmEmail),
     authService.confirmEmail
-)
+);
+router.patch(
+    '/confirm-login',
+    validation(validators.confirmLogin),
+    authService.loginConfirmation
+);
 router.post('/login', authService.login);
 router.post('/signup-gmail',validation(validators.signupGmail),authService.signupGmail);
 router.post('/login-gmail',validation(validators.signupGmail),authService.loginGmail);

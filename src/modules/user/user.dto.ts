@@ -9,3 +9,4 @@ export type ULogoutDto = z.infer<typeof logout.body>;
  export type IFreezeAccountDto= z.infer<typeof validators.freezeAccount.params >
  export type IRestoreAccountDto= z.infer<typeof validators.restoreAccount.params >
  export type IHardDeleteAccountDto= z.infer<typeof validators.hardDeleteAccount.params >
+ export type IVerifyTwoStepVerificationDto= z.infer<typeof validators.verifyTwoStepVerification.body >

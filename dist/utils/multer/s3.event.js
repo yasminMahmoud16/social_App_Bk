@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.s3Event = void 0;
 const node_events_1 = require("node:events");
 const s3_config_1 = require("./s3.config");
-const user_repository_1 = require("../../Db/repository/user.repository.");
+const user_repository_1 = require("../../Db/repository/user.repository");
 const User_model_1 = require("../../Db/model/User.model");
 exports.s3Event = new node_events_1.EventEmitter();
 exports.s3Event.on("trackProfileImageUpload", (data) => {

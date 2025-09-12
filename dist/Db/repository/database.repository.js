@@ -18,8 +18,27 @@ class DatabaseRepository {
         ;
         return await doc.exec();
     }
+    async find({ filter, select, options }) {
+        const doc = this.model.find(filter || {}).select(select || "");
+        if (options?.populate) {
+            doc.populate(options?.populate);
+        }
+        ;
+        if (options?.lean) {
+            doc.lean(options?.lean);
+        }
+        ;
+        if (options?.skip) {
+            doc.skip(options?.skip);
+        }
+        ;
+        return await doc.exec();
+    }
     async create({ data, options, }) {
         return await this.model.create(data, options);
+    }
+    async insertMany({ data, }) {
+        return await this.model.insertMany(data);
     }
     async updateOne({ filter, update, options }) {
         return await this.model.updateOne(filter, {
@@ -35,8 +54,23 @@ class DatabaseRepository {
         }, options);
     }
     ;
+    async findOneAndUpdate({ filter, update, options = { new: true } }) {
+        return await this.model.findOneAndUpdate(filter, {
+            ...update,
+            $inc: { __v: 1 }
+        }, options);
+    }
+    ;
     async deleteOne({ filter, }) {
         return await this.model.deleteOne(filter);
+    }
+    ;
+    async findOneAndDelete({ filter, }) {
+        return await this.model.findOneAndDelete(filter);
+    }
+    ;
+    async deleteMany({ filter, }) {
+        return await this.model.deleteMany(filter);
     }
     ;
 }

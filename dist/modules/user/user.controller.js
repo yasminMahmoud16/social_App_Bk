@@ -46,6 +46,7 @@ const cloud_multer_1 = require("../../utils/multer/cloud.multer");
 const user_authorization_1 = require("./user.authorization");
 const router = (0, express_1.Router)();
 router.get('/', (0, authentication_middleware_1.authentication)(), user_services_1.default.profile);
+router.patch('/', (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.updateBasicProfileInfo), user_services_1.default.updateBasicProfileInfo);
 router.patch('/profile-image', (0, authentication_middleware_1.authentication)(), user_services_1.default.profileImage);
 router.patch('/profile-cover-images', (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudMulter)({ validation: cloud_multer_1.fileValidation.image, storageApproach: cloud_multer_1.StorageEnum.memory }).array("image", 2), user_services_1.default.profileCoverImages);
 router.get('/:userId/profile', user_services_1.default.shareProfile);
@@ -57,4 +58,6 @@ router.patch('/confirm-update-email', (0, authentication_middleware_1.authentica
 router.delete('{/:userId}/freeze-account', (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.freezeAccount), user_services_1.default.freezeAccount);
 router.patch('/:userId/restore-account', (0, authentication_middleware_1.authorization)(user_authorization_1.endPoints.restore), (0, validation_middleware_1.validation)(validators.restoreAccount), user_services_1.default.restoreAccount);
 router.delete('/:userId/hard-delete-account', (0, authentication_middleware_1.authorization)(user_authorization_1.endPoints.hardDelete), (0, validation_middleware_1.validation)(validators.hardDeleteAccount), user_services_1.default.hardDeleteAccount);
+router.get('/two-step-verification', (0, authentication_middleware_1.authentication)(), user_services_1.default.twoStepVerification);
+router.patch('/verify-two-step-verification', (0, authentication_middleware_1.authentication)(), user_services_1.default.verifyTwoStepVerification);
 exports.default = router;

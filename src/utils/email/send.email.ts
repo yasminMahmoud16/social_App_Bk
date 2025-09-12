@@ -14,10 +14,10 @@ export const sendEmail = async (data: Mail.Options): Promise<void> => {
     
     const transporter:Transporter<SMTPTransport.SentMessageInfo, SMTPTransport.Options> = createTransport({
         service: "gmail",
-    auth: {
-            user: process.env.EMAIL as string,
-            pass: process.env.EMAIL_PASSWORD as string,
-        },
+        auth: {
+                user: process.env.EMAIL as string,
+                pass: process.env.EMAIL_PASSWORD as string,
+            },
     });
 
 

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteAccount = exports.restoreAccount = exports.freezeAccount = exports.confirmUpdateEmail = exports.updateEmail = exports.updatePassword = exports.logout = void 0;
+exports.updateBasicProfileInfo = exports.verifyTwoStepVerification = exports.hardDeleteAccount = exports.restoreAccount = exports.freezeAccount = exports.confirmUpdateEmail = exports.updateEmail = exports.updatePassword = exports.logout = void 0;
 const zod_1 = require("zod");
 const token_security_1 = require("../../utils/security/token.security");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
@@ -57,3 +57,11 @@ exports.restoreAccount = {
     }),
 };
 exports.hardDeleteAccount = exports.restoreAccount;
+exports.verifyTwoStepVerification = exports.confirmUpdateEmail;
+exports.updateBasicProfileInfo = {
+    body: zod_1.z.strictObject({
+        username: validation_middleware_1.generalFields.username,
+        gender: validation_middleware_1.generalFields.gender,
+        phone: validation_middleware_1.generalFields.phone
+    })
+};

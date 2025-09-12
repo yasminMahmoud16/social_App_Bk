@@ -14,14 +14,18 @@ import {resolve} from 'node:path'
 config({path:resolve('./src/config/.env.development')})
 
 // modules
-import authController from './modules/auth/auth.controller'
-import userController from './modules/user/user.controller'
+
+import {authRouter,userRouter,postRouter} from "./modules"
 import { BadRequestException, globalErrorHandling } from "./utils/response/error.response";
 import connectDb from "./Db/connection.db";
-import { createGetPreSignedLink, deleteFolderByPrefix, getFile } from "./utils/multer/s3.config";
+import { createGetPreSignedLink, getFile, } from "./utils/multer/s3.config";
+
+
 // apply async/await on callback  
 import { promisify } from "node:util";
 import { pipeline } from "node:stream";
+// import { UserRepository } from "./Db/repository/user.repository";
+// import { UserModel } from "./Db/model/User.model";
 const createWriteStreamPip = promisify(pipeline) //return pipeline with async/await 
 // rate limit app
 const limiter = rateLimit({
@@ -50,8 +54,9 @@ const bootstrap = async (): Promise<void> => {
     });
 
     // app sub modules 
-    app.use('/auth',authController);
-    app.use('/user', userController);
+    app.use('/auth',authRouter);
+    app.use('/user', userRouter);
+    app.use('/post', postRouter);
 
 
             app.get('/upload/pre-signed/*path', async (req: Request, res: Response): Promise<Response> => {
@@ -108,7 +113,51 @@ const bootstrap = async (): Promise<void> => {
     app.listen(port, () => {
         console.log(`Server is running on port :::${port} 🚀`);
         
-    })
+    });
+
+
+    // Hooks 
+    async function test() {
+        try {
+            // const userModel = new UserRepository(UserModel);
+
+
+
+
+            // const user = await userModel.insertMany({
+            //     data: [
+            //         {
+            //         username: "yasmeen mahmoud",
+            //         email: `${Date.now()}@gmail.com`,
+            //         password:"1233454"
+            //     },
+            //         {
+            //         username: "yasmeen mahmoud",
+            //         email: `${Date.now()}uuu@gmail.com`,
+            //         password:"1233454"
+            //     },
+            //     ]
+            // })
+            // const user = await userModel.updateOne({
+            //     filter: { _id: "68bb3a488b3bccba4e091522" },
+            //     update: {
+            //         freezedAt: new Date()
+            //     }
+            // });
+            // const user = await userModel.findByIdAndUpdate({
+            //     id: "68bb3a488b3bccba4e091522" as unknown as Types.ObjectId ,
+            //     update: {
+            //         freezedAt: new Date()
+            //     }
+            // });
+            // console.log({ result: user });
+            
+        } catch (error) {
+            console.log(error);
+            
+        }
+    }
+    test()
 };
 
 export default bootstrap

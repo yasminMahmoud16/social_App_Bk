@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const User_model_1 = require("../../Db/model/User.model");
-const user_repository_1 = require("../../Db/repository/user.repository.");
 const error_response_1 = require("../../utils/response/error.response");
 const hash_security_1 = require("../../utils/security/hash.security");
 const otp_1 = require("../../utils/otp/otp");
@@ -9,8 +8,10 @@ const token_security_1 = require("../../utils/security/token.security");
 const google_auth_library_1 = require("google-auth-library");
 const email_event_1 = require("../../utils/email/email.event");
 const success_response_1 = require("../../utils/response/success.response");
+const encrypt_security_1 = require("../../utils/security/encrypt.security");
+const repository_1 = require("../../Db/repository");
 class AuthenticationServices {
-    userModel = new user_repository_1.UserRepository(User_model_1.UserModel);
+    userModel = new repository_1.UserRepository(User_model_1.UserModel);
     constructor() { }
     async verifyGmailSignup(idToken) {
         const client = new google_auth_library_1.OAuth2Client();
@@ -26,7 +27,7 @@ class AuthenticationServices {
         return payload;
     }
     signup = async (req, res) => {
-        let { username, email, password } = req.body;
+        let { username, email, password, phone } = req.body;
         const checkUser = await this.userModel.findOne({
             filter: { email },
             select: "email",
@@ -39,10 +40,16 @@ class AuthenticationServices {
             throw new error_response_1.ConflictException("email is exists");
         }
         const otp = await (0, otp_1.generateNumberOtp)();
+        const expireOtp = new Date(Date.now() + 2 * 60 * 1000);
         const user = await this.userModel.createUser({
-            data: [{ username, email, password: await (0, hash_security_1.generateHash)(password), confirmEmailOtp: await (0, hash_security_1.generateHash)(String(otp)) }]
+            data: [{
+                    username, email,
+                    password,
+                    phone: await (0, encrypt_security_1.generateEncryption)({ plainText: phone }),
+                    confirmEmailOtp: `${otp}`,
+                    confirmEmailOtpExpiresIn: expireOtp
+                }]
         });
-        email_event_1.emailEvent.emit("confirmEmail", { to: email, otp });
         return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
     confirmEmail = async (req, res) => {
@@ -60,6 +67,11 @@ class AuthenticationServices {
         ;
         if (!await (0, hash_security_1.compareHash)(otp, user.confirmEmailOtp)) {
             throw new error_response_1.BadRequestException("in-valid confirmation code");
+        }
+        ;
+        const now = new Date();
+        if (user.confirmEmailOtpExpiresIn && now > user.confirmEmailOtpExpiresIn) {
+            throw new error_response_1.BadRequestException("Signup otp expires ");
         }
         await this.userModel.updateOne({
             filter: { email },
@@ -92,11 +104,59 @@ class AuthenticationServices {
             throw new error_response_1.BadRequestException("In-valid login data");
         }
         ;
+        if (user.verifyTwoStepsOtpAt) {
+            const expireOtp = new Date(Date.now() + 1 * 60 * 1000);
+            const otp = await (0, otp_1.generateLoginOtp)();
+            await email_event_1.emailEvent.emit("verification-code", { to: email, otp });
+            await this.userModel.updateOne({
+                filter: {
+                    email
+                },
+                update: {
+                    confirmLoginOtp: await (0, hash_security_1.generateHash)(String(otp)),
+                    confirmLoginOtpExpiresAt: expireOtp
+                }
+            });
+            return (0, success_response_1.successResponse)({
+                res, message: 'verification code send please verify your identity',
+            });
+        }
         const credentials = await (0, token_security_1.createLoginCredentials)(user);
         return (0, success_response_1.successResponse)({
             res, message: 'User logged',
             data: { credentials }
         });
+    };
+    loginConfirmation = async (req, res) => {
+        let { email, loginOtp } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                verifyTwoStepsOtpAt: { $exists: true },
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("in-valid data or account already verified");
+        }
+        ;
+        const now = new Date();
+        if (user.confirmLoginOtpExpiresAt && now > user.confirmLoginOtpExpiresAt) {
+            throw new error_response_1.BadRequestException("login otp expires ");
+        }
+        if (!await (0, hash_security_1.compareHash)(loginOtp, user.confirmLoginOtp)) {
+            throw new error_response_1.BadRequestException("in-valid confirmation code");
+        }
+        await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                confirmLoginOtpAt: new Date(),
+                $unset: {
+                    confirmLoginOtp: 1,
+                }
+            }
+        });
+        const credentials = await (0, token_security_1.createLoginCredentials)(user);
+        return (0, success_response_1.successResponse)({ res, message: 'login confirmed', data: { credentials } });
     };
     signupGmail = async (req, res) => {
         const { idToken } = req.body;

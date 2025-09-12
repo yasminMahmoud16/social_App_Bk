@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
-import { IConfirmUpdateEmailInputDto, IFreezeAccountDto, IHardDeleteAccountDto, IRestoreAccountDto, IUpdateEmailInputDto, ULogoutDto } from "./user.dto";
+import { IConfirmUpdateEmailInputDto, IFreezeAccountDto, IHardDeleteAccountDto, IRestoreAccountDto, IUpdateEmailInputDto, IVerifyTwoStepVerificationDto, ULogoutDto } from "./user.dto";
 import { createLoginCredentials, createRevokeToken, LogoutEnum } from "../../utils/security/token.security";
 import { Types, UpdateQuery } from "mongoose";
 import { HUserDocument, IUser, ProviderEnum, RoleEnum, UserModel } from "../../Db/model/User.model";
-import { UserRepository } from "../../Db/repository/user.repository.";
 import { JwtPayload } from "jsonwebtoken";
 import { IUpdatePasswordInputDto } from "../user/user.dto";
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizeException } from "../../utils/response/error.response";
@@ -15,6 +14,8 @@ import { s3Event } from "../../utils/multer/s3.event";
 import { successResponse } from "../../utils/response/success.response";
 import {  IProfileImageResponse, IUserResponse } from "./user.entities";
 import { ILoginResponse } from "../auth/auth.entities";
+import { decryptEncryption, generateEncryption } from "../../utils/security/encrypt.security";
+import { UserRepository } from "../../Db/repository";
 
 class UserServices {
     private userModel = new UserRepository(UserModel);
@@ -23,15 +24,12 @@ class UserServices {
 
     profile = async (req: Request, res: Response): Promise<Response> => {
 
-        // return res.status(200).json({
-        //     message: "user profile",
-        //     user: req.user,
-        //     decoded: req.decoded?.iat
-        // });
+
 
         if (!req.user) {
             throw new UnauthorizeException("missing user details ")
         }
+        req.user.phone= await decryptEncryption({ciphertext:req.user.phone as unknown as string} )
         return successResponse<IUserResponse>({
             res,
             data:{user:req.user}
@@ -121,11 +119,6 @@ class UserServices {
             throw new NotFoundException("User not found")
         }
 
-
-        // return res.status(200).json({
-        //     message: "user profile",
-        //     data: { user }
-        // });
         return successResponse({
             res,
             message: "user profile",
@@ -404,6 +397,99 @@ class UserServices {
             message: 'Email confirmed' 
         });
     }
+    updateBasicProfileInfo = async (req: Request, res: Response): Promise<Response> => {
+        if (req.body.phone) {
+            req.body.phone = await generateEncryption({plainText:req.body.phone})
+        }
+
+        const user =await this.userModel.findByIdAndUpdate({
+                id: req.user?._id as Types.ObjectId,
+
+
+            update: {
+                $set: req.body,
+                $inc: { __v: 1 }
+            }
+        })
+
+
+        // return res.status(200).json({ message: 'Email confirmed' })
+        return successResponse({
+            res,
+            message: 'Basic profile info updated successfully ',
+            data:{user}
+        });
+    }
+
+
+    // 2 step verification
+
+    twoStepVerification = async (req: Request, res: Response): Promise<Response> => {
+
+
+
+        
+        if (!req.user) {
+            throw new UnauthorizeException("missing user details")
+        }
+        const otp = await generateNumberOtp();
+         const expireOtp = new Date(Date.now() + 2 * 60 * 1000); 
+
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id as unknown as Types.ObjectId,
+            update: {
+                // verifyTwoStepsOtp: await generateHash(String(otp)),
+                verifyTwoStepsOtp: `${otp}`,
+                verifyTwoStepsOtpExpiresAt:expireOtp
+            }
+        });
+        await emailEvent.emit("2-step-verification-otp",{to:req.user.email ,otp})
+        return successResponse<IUserResponse>({
+            res,
+            message:"Otp send, Please check your email",
+        });
+
+    };
+    verifyTwoStepVerification = async (req: Request, res: Response): Promise<Response> => {
+
+        let { email, otp }:IVerifyTwoStepVerificationDto = req.body;
+
+        const user = await this.userModel.findOne({
+                    filter: {
+                        email,
+                        verifyTwoStepsOtp: { $exists: true },
+                        verifyTwoStepsOtpAt: { $exists: false },
+                    },
+        
+                });
+        
+                if (!user) {
+                    throw new NotFoundException("in-valid data or account already verified")
+                };
+        
+                if (!await compareHash(otp, user.verifyTwoStepsOtp as string)) {
+                    throw new BadRequestException("in-valid confirmation code")
+        };
+        const now = new Date();
+        if (user.verifyTwoStepsOtpExpiresAt && now > user.verifyTwoStepsOtpExpiresAt) {
+            throw new BadRequestException("2-steps-verification otp expires ")
+        }
+        
+                await this.userModel.updateOne({
+                    filter: { email },
+                    update: {
+                        verifyTwoStepsOtpAt: new Date(),
+                        $unset: {
+                            verifyTwoStepsOtp: 1,
+                        }
+                    }
+                });
+        return successResponse<IUserResponse>({
+            res,
+            message:" 2-steps-verification enabled successfully on your account",
+        });
+
+    };
 };
 
 export default new UserServices();

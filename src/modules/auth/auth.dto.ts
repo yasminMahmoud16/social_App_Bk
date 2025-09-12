@@ -13,4 +13,6 @@ import {z} from "zod"
  export type ISignupWithGmailInputDto= z.infer<typeof validators.signupGmail.body >
  export type ISendForgetCodeInputDto= z.infer<typeof validators.sendForgetCode.body >
  export type IVerifyForgetCodeInputDto= z.infer<typeof validators.verifyForgetCode.body >
- export type IResetForgetPasswordInputDto= z.infer<typeof validators.resetForgetPassword.body >
+export type IResetForgetPasswordInputDto = z.infer<typeof validators.resetForgetPassword.body>
+  export type IConfirmLoginInputDto= z.infer<typeof validators.confirmLogin.body >
+

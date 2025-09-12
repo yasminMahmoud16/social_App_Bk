@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const token_security_1 = require("../../utils/security/token.security");
 const User_model_1 = require("../../Db/model/User.model");
-const user_repository_1 = require("../../Db/repository/user.repository.");
 const error_response_1 = require("../../utils/response/error.response");
 const hash_security_1 = require("../../utils/security/hash.security");
 const email_event_1 = require("../../utils/email/email.event");
@@ -10,13 +9,16 @@ const otp_1 = require("../../utils/otp/otp");
 const s3_config_1 = require("../../utils/multer/s3.config");
 const s3_event_1 = require("../../utils/multer/s3.event");
 const success_response_1 = require("../../utils/response/success.response");
+const encrypt_security_1 = require("../../utils/security/encrypt.security");
+const repository_1 = require("../../Db/repository");
 class UserServices {
-    userModel = new user_repository_1.UserRepository(User_model_1.UserModel);
+    userModel = new repository_1.UserRepository(User_model_1.UserModel);
     constructor() { }
     profile = async (req, res) => {
         if (!req.user) {
             throw new error_response_1.UnauthorizeException("missing user details ");
         }
+        req.user.phone = await (0, encrypt_security_1.decryptEncryption)({ ciphertext: req.user.phone });
         return (0, success_response_1.successResponse)({
             res,
             data: { user: req.user }
@@ -301,6 +303,77 @@ class UserServices {
         return (0, success_response_1.successResponse)({
             res,
             message: 'Email confirmed'
+        });
+    };
+    updateBasicProfileInfo = async (req, res) => {
+        if (req.body.phone) {
+            req.body.phone = await (0, encrypt_security_1.generateEncryption)({ plainText: req.body.phone });
+        }
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id,
+            update: {
+                $set: req.body,
+                $inc: { __v: 1 }
+            }
+        });
+        return (0, success_response_1.successResponse)({
+            res,
+            message: 'Basic profile info updated successfully ',
+            data: { user }
+        });
+    };
+    twoStepVerification = async (req, res) => {
+        if (!req.user) {
+            throw new error_response_1.UnauthorizeException("missing user details");
+        }
+        const otp = await (0, otp_1.generateNumberOtp)();
+        const expireOtp = new Date(Date.now() + 2 * 60 * 1000);
+        const user = await this.userModel.findByIdAndUpdate({
+            id: req.user?._id,
+            update: {
+                verifyTwoStepsOtp: `${otp}`,
+                verifyTwoStepsOtpExpiresAt: expireOtp
+            }
+        });
+        await email_event_1.emailEvent.emit("2-step-verification-otp", { to: req.user.email, otp });
+        return (0, success_response_1.successResponse)({
+            res,
+            message: "Otp send, Please check your email",
+        });
+    };
+    verifyTwoStepVerification = async (req, res) => {
+        let { email, otp } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                verifyTwoStepsOtp: { $exists: true },
+                verifyTwoStepsOtpAt: { $exists: false },
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("in-valid data or account already verified");
+        }
+        ;
+        if (!await (0, hash_security_1.compareHash)(otp, user.verifyTwoStepsOtp)) {
+            throw new error_response_1.BadRequestException("in-valid confirmation code");
+        }
+        ;
+        const now = new Date();
+        if (user.verifyTwoStepsOtpExpiresAt && now > user.verifyTwoStepsOtpExpiresAt) {
+            throw new error_response_1.BadRequestException("2-steps-verification otp expires ");
+        }
+        await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                verifyTwoStepsOtpAt: new Date(),
+                $unset: {
+                    verifyTwoStepsOtp: 1,
+                }
+            }
+        });
+        return (0, success_response_1.successResponse)({
+            res,
+            message: " 2-steps-verification enabled successfully on your account",
         });
     };
 }

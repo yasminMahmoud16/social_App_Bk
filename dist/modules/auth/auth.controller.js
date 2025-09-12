@@ -43,6 +43,7 @@ const validation_middleware_1 = require("../../middleware/validation.middleware"
 const router = (0, express_1.Router)();
 router.post('/signup', (0, validation_middleware_1.validation)(validators.signup), auth_services_1.default.signup);
 router.patch('/confirm-email', (0, validation_middleware_1.validation)(validators.confirmEmail), auth_services_1.default.confirmEmail);
+router.patch('/confirm-login', (0, validation_middleware_1.validation)(validators.confirmLogin), auth_services_1.default.loginConfirmation);
 router.post('/login', auth_services_1.default.login);
 router.post('/signup-gmail', (0, validation_middleware_1.validation)(validators.signupGmail), auth_services_1.default.signupGmail);
 router.post('/login-gmail', (0, validation_middleware_1.validation)(validators.signupGmail), auth_services_1.default.loginGmail);

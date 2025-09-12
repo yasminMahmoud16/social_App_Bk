@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserModel = exports.ProviderEnum = exports.RoleEnum = exports.GenderEnum = void 0;
 const mongoose_1 = require("mongoose");
+const hash_security_1 = require("../../utils/security/hash.security");
+const email_event_1 = require("../../utils/email/email.event");
 var GenderEnum;
 (function (GenderEnum) {
     GenderEnum["male"] = "male";
@@ -26,9 +28,18 @@ const userSchema = new mongoose_1.Schema({
     emailUpdateRequestedAt: { type: Date },
     confirmEmailOtp: { type: String },
     confirmedAt: { type: Date },
-    password: { type: String, required: function () {
+    confirmEmailOtpExpiresIn: { type: Date },
+    verifyTwoStepsOtpAt: { type: Date },
+    verifyTwoStepsOtpExpiresAt: { type: Date },
+    verifyTwoStepsOtp: { type: String },
+    confirmLoginOtp: { type: String },
+    confirmLoginOtpAt: { type: Date },
+    confirmLoginOtpExpiresAt: { type: Date },
+    password: {
+        type: String, required: function () {
             return this.provider === ProviderEnum.GOOGLE ? false : true;
-        } },
+        }
+    },
     resetPasswordOtp: { type: String },
     changeCredentialTime: { type: Date },
     phone: { type: String },
@@ -55,5 +66,47 @@ userSchema.virtual("username").set(function (value) {
     this.set({ firstName, lastName });
 }).get(function () {
     return this.firstName + " " + this.lastName;
+});
+userSchema.pre("save", async function (next) {
+    this.wasNew = this.isNew;
+    if (this.isModified("password")) {
+        this.password = await (0, hash_security_1.generateHash)(this.password);
+    }
+    if (this.isModified("confirmEmailOtp")) {
+        this.confirmEmailPlainOtp = this.confirmEmailOtp;
+        this.confirmEmailOtp = await (0, hash_security_1.generateHash)(this.confirmEmailOtp);
+    }
+    next();
+});
+userSchema.post("save", async function (doc, next) {
+    const that = this;
+    if (that.wasNew && that.confirmEmailPlainOtp) {
+        email_event_1.emailEvent.emit("confirmEmail", {
+            to: this.email,
+            otp: that.confirmEmailPlainOtp
+        });
+    }
+    next();
+});
+userSchema.pre(["find", "findOne"], function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, freezedAt: { $exists: false } });
+    }
+    next();
+});
+userSchema.pre(["findOneAndUpdate", "findOne"], async function (next) {
+    const query = this.getQuery();
+    const update = this.getUpdate();
+    console.log({ update });
+    console.log({ query });
+    console.log({ otp: update?.verifyTwoStepsOtp });
+    if (update?.verifyTwoStepsOtp) {
+        update.verifyTwoStepsOtp = await (0, hash_security_1.generateHash)(update.verifyTwoStepsOtp);
+    }
+    next();
 });
 exports.UserModel = mongoose_1.models.User || (0, mongoose_1.model)("User", userSchema);

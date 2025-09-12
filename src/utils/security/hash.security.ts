@@ -8,3 +8,4 @@ export const compareHash = async (plainText: string, hash:string): Promise<boole
     return await compare(plainText, hash);
 };
 
+

@@ -10,8 +10,7 @@ const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = require("dotenv");
 const node_path_1 = require("node:path");
 (0, dotenv_1.config)({ path: (0, node_path_1.resolve)('./src/config/.env.development') });
-const auth_controller_1 = __importDefault(require("./modules/auth/auth.controller"));
-const user_controller_1 = __importDefault(require("./modules/user/user.controller"));
+const modules_1 = require("./modules");
 const error_response_1 = require("./utils/response/error.response");
 const connection_db_1 = __importDefault(require("./Db/connection.db"));
 const s3_config_1 = require("./utils/multer/s3.config");
@@ -33,8 +32,9 @@ const bootstrap = async () => {
             message: `welcome to ${process.env.APPLICATION_NAME} backend landing page ❤️🌸`
         });
     });
-    app.use('/auth', auth_controller_1.default);
-    app.use('/user', user_controller_1.default);
+    app.use('/auth', modules_1.authRouter);
+    app.use('/user', modules_1.userRouter);
+    app.use('/post', modules_1.postRouter);
     app.get('/upload/pre-signed/*path', async (req, res) => {
         const { downloadName, download = "false", expiresIn = 120 } = req.query;
         const { path } = req.params;
@@ -74,5 +74,13 @@ const bootstrap = async () => {
     app.listen(port, () => {
         console.log(`Server is running on port :::${port} 🚀`);
     });
+    async function test() {
+        try {
+        }
+        catch (error) {
+            console.log(error);
+        }
+    }
+    test();
 };
 exports.default = bootstrap;

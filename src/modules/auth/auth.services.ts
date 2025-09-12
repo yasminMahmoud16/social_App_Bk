@@ -1,16 +1,17 @@
 
 import type { Request, Response } from "express"
-import type { IConfirmEmailInputDto, ILoginBodyInputDto, IResetForgetPasswordInputDto, ISendForgetCodeInputDto, ISignupBodyInputDto, ISignupWithGmailInputDto, IVerifyForgetCodeInputDto } from "./auth.dto";
+import type { IConfirmEmailInputDto, IConfirmLoginInputDto, ILoginBodyInputDto, IResetForgetPasswordInputDto, ISendForgetCodeInputDto, ISignupBodyInputDto, ISignupWithGmailInputDto, IVerifyForgetCodeInputDto } from "./auth.dto";
 import { ProviderEnum, UserModel } from "../../Db/model/User.model";
-import { UserRepository } from "../../Db/repository/user.repository.";
 import { BadRequestException, ConflictException, NotFoundException } from "../../utils/response/error.response";
 import { compareHash, generateHash } from "../../utils/security/hash.security";
-import { generateNumberOtp } from "../../utils/otp/otp";
+import { generateLoginOtp, generateNumberOtp } from "../../utils/otp/otp";
 import { createLoginCredentials } from "../../utils/security/token.security";
 import { OAuth2Client, type TokenPayload } from 'google-auth-library';
 import { emailEvent } from "../../utils/email/email.event";
 import { successResponse } from "../../utils/response/success.response";
 import { ILoginResponse } from "./auth.entities";
+import { generateEncryption } from "../../utils/security/encrypt.security";
+import { UserRepository } from "../../Db/repository";
 
 
 
@@ -41,7 +42,7 @@ class AuthenticationServices {
      */
 
     signup = async (req: Request, res: Response): Promise<Response> => {
-        let { username, email, password }: ISignupBodyInputDto = req.body;
+        let { username, email, password ,phone}: ISignupBodyInputDto = req.body;
 
         const checkUser = await this.userModel.findOne({
             filter: { email },
@@ -56,15 +57,24 @@ class AuthenticationServices {
             throw new ConflictException("email is exists")
         }
 
-        const otp = await generateNumberOtp()
+        const otp = await generateNumberOtp();
+         const expireOtp = new Date(Date.now() + 2 * 60 * 1000); 
         const user = await this.userModel.createUser({
-            data: [{ username, email, password: await generateHash(password), confirmEmailOtp: await generateHash(String(otp)) }]
+            data: [{
+                username, email,
+                password,
+                phone: await generateEncryption({plainText:phone}),
+                confirmEmailOtp:`${otp}`,
+                confirmEmailOtpExpiresIn:expireOtp
+            }]
         });
 
-        emailEvent.emit("confirmEmail", { to: email, otp })
         return successResponse({ res, statusCode: 201 })
         // return res.status(201).json({ message: 'signup', data: { user } })
-    }
+    };
+
+
+
     confirmEmail = async (req: Request, res: Response): Promise<Response> => {
         let { email, otp }: IConfirmEmailInputDto = req.body;
 
@@ -75,7 +85,7 @@ class AuthenticationServices {
                 confirmedAt: { $exists: false },
             },
 
-        })
+        });
 
         if (!user) {
             throw new NotFoundException("in-valid data or account already verified")
@@ -83,6 +93,10 @@ class AuthenticationServices {
 
         if (!await compareHash(otp, user.confirmEmailOtp as string)) {
             throw new BadRequestException("in-valid confirmation code")
+        };
+        const now = new Date();
+        if (user.confirmEmailOtpExpiresIn && now > user.confirmEmailOtpExpiresIn) {
+            throw new BadRequestException("Signup otp expires ")
         }
 
         await this.userModel.updateOne({
@@ -93,19 +107,17 @@ class AuthenticationServices {
                     confirmEmailOtp: 1,
                 }
             }
-        })
+        });
 
 
         return successResponse({ res, message: 'Email confirmed' })
-    }
+    };
     login = async (req: Request, res: Response): Promise<Response> => {
         let { email, password }: ILoginBodyInputDto = req.body;
         const user = await this.userModel.findOne({
             filter: {
                 email,
                 provider: ProviderEnum.SYSTEM
-
-
             }
         });
         if (!user) {
@@ -120,14 +132,79 @@ class AuthenticationServices {
             throw new BadRequestException("In-valid login data")
         };
 
-        const credentials = await createLoginCredentials(user)
+        if (user.verifyTwoStepsOtpAt) {
 
+            const expireOtp = new Date(Date.now() + 1 * 60 * 1000); // ExpiresIn 1 min 
+
+            const otp = await generateLoginOtp();
+            await emailEvent.emit("verification-code", { to: email, otp });
+            await this.userModel.updateOne({
+                filter: {
+                    email
+                },
+                update: {
+                    confirmLoginOtp: await generateHash(String(otp)),
+                    confirmLoginOtpExpiresAt:expireOtp
+                }
+            });
+
+            return successResponse<ILoginResponse>({
+            res, message: 'verification code send please verify your identity',
+        });
+        }
+        
+            const credentials = await createLoginCredentials(user)
 
         return successResponse<ILoginResponse>({
             res, message: 'User logged',
             data: { credentials }
         });
     };
+    loginConfirmation = async (req: Request, res: Response): Promise<Response> => {
+        let { email, loginOtp }: IConfirmLoginInputDto = req.body;
+
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                verifyTwoStepsOtpAt: { $exists: true },
+            },
+
+        });
+
+        if (!user) {
+            throw new NotFoundException("in-valid data or account already verified")
+        };
+
+        
+        const now = new Date();
+        if (user.confirmLoginOtpExpiresAt && now > user.confirmLoginOtpExpiresAt) {
+            throw new BadRequestException("login otp expires ")
+        }
+        if (!await compareHash(loginOtp, user.confirmLoginOtp as string)) {
+            throw new BadRequestException("in-valid confirmation code")
+        }
+
+        await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                confirmLoginOtpAt: new Date(),
+                $unset: {
+                    confirmLoginOtp: 1,
+                }
+            }
+        });
+
+        const credentials = await createLoginCredentials(user)
+
+
+
+        return successResponse({ res, message: 'login confirmed', data: { credentials } })
+    };
+
+
+
+
+
 
 
 

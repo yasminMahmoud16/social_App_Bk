@@ -35,3 +35,33 @@ exports.emailEvent.on("updateEmail", async (data) => {
         console.log(`Fail to send email`, error);
     }
 });
+exports.emailEvent.on("2-step-verification-otp", async (data) => {
+    try {
+        data.subject = "2-step-verification-otp";
+        data.html = (0, verify_templet_email_1.verifyEmail)({ otp: data.otp, title: "2-step-verification-otp" });
+        await (0, send_email_1.sendEmail)(data);
+    }
+    catch (error) {
+        console.log(`Fail to send email`, error);
+    }
+});
+exports.emailEvent.on("verification-code", async (data) => {
+    try {
+        data.subject = "verification-code";
+        data.html = (0, verify_templet_email_1.verifyEmail)({ otp: data.otp, title: "verification-code" });
+        await (0, send_email_1.sendEmail)(data);
+    }
+    catch (error) {
+        console.log(`Fail to send email`, error);
+    }
+});
+exports.emailEvent.on("send-tag-mentioned", async (data) => {
+    try {
+        data.subject = "some one tagged you on a post";
+        data.html = (0, verify_templet_email_1.verifyEmail)({ postLink: data.postLink, title: "Your friend mention you in a post" });
+        await (0, send_email_1.sendEmail)(data);
+    }
+    catch (error) {
+        console.log(`Fail to send email`, error);
+    }
+});

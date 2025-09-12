@@ -10,6 +10,9 @@ import { endPoints } from "./user.authorization";
 const router = Router();
 
 router.get('/',authentication(),userServices.profile);
+router.patch('/', authentication(),
+    validation(validators.updateBasicProfileInfo)
+    , userServices.updateBasicProfileInfo);
 router.patch('/profile-image',
     authentication(),
     // cloudMulter({validation:fileValidation.image ,storageApproach:StorageEnum.disk}).single("image"),
@@ -30,5 +33,11 @@ router.patch('/confirm-update-email',authentication(),validation(validators.conf
 // delete 
 router.delete('{/:userId}/freeze-account',authentication(),validation(validators.freezeAccount),userServices.freezeAccount);
 router.patch('/:userId/restore-account',authorization(endPoints.restore),validation(validators.restoreAccount),userServices.restoreAccount);
-router.delete('/:userId/hard-delete-account',authorization(endPoints.hardDelete),validation(validators.hardDeleteAccount),userServices.hardDeleteAccount);
+router.delete('/:userId/hard-delete-account', authorization(endPoints.hardDelete), validation(validators.hardDeleteAccount), userServices.hardDeleteAccount);
+
+
+
+router.get('/two-step-verification',authentication(),userServices.twoStepVerification);
+router.patch('/verify-two-step-verification',authentication(),userServices.verifyTwoStepVerification);
+
 export default router;

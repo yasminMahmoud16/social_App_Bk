@@ -1,13 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyEmail = void 0;
-const verifyEmail = ({ otp, title }) => {
+const verifyEmail = ({ title, postLink, otp, }) => {
     return ` 
         <h2 style="color:#333;text-align:center;">${title} 📧</h2>
     
     
         <p style="font-size:16px;color:#555; text-align:center">
-          ${otp}
+          ${otp || postLink}
         </p>
         <div style="margin:30px 0;text-align:center;">
          

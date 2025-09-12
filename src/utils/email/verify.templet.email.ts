@@ -1,10 +1,10 @@
-export const verifyEmail = ({otp,title}:{otp:number , title:string}):string => {
+export const verifyEmail = ({title, postLink,otp,}:{title:string,postLink?:string,otp?:number  }):string => {
     return  ` 
         <h2 style="color:#333;text-align:center;">${title} 📧</h2>
     
     
         <p style="font-size:16px;color:#555; text-align:center">
-          ${otp}
+          ${otp ||postLink}
         </p>
         <div style="margin:30px 0;text-align:center;">
          

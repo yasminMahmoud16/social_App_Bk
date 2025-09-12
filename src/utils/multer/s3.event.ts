@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { deleteFile, getFile } from "./s3.config";
-import { UserRepository } from "../../Db/repository/user.repository.";
+import { UserRepository } from "../../Db/repository/user.repository";
 import { UserModel } from "../../Db/model/User.model";
 
 export const s3Event = new EventEmitter();
