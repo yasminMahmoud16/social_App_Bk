@@ -42,11 +42,16 @@ const postSchema = new mongoose_1.Schema({
     restoredAt: Date,
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
 }, {
-    timestamps: true
+    timestamps: true,
+    strictQuery: true,
+    toObject: {
+        virtuals: true
+    },
+    toJSON: {
+        virtuals: true
+    }
 });
 postSchema.post("save", async function (doc, next) {
-    console.log({ doc: doc });
-    console.log({ this: this });
     let populated = await doc.populate({
         path: "tags",
         select: "email"
@@ -60,6 +65,16 @@ postSchema.post("save", async function (doc, next) {
     });
     next();
 });
+postSchema.pre(["findOne", "find", "countDocuments"], async function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, freezedAt: { $exists: false } });
+    }
+    next();
+});
 postSchema.pre(["findOneAndUpdate", "updateOne"], async function (next) {
     const query = this.getQuery();
     if (query.paranoid === false) {
@@ -69,5 +84,11 @@ postSchema.pre(["findOneAndUpdate", "updateOne"], async function (next) {
         this.setQuery({ ...query, freezedAt: { $exists: false } });
     }
     next();
+});
+postSchema.virtual("comments", {
+    localField: "_id",
+    foreignField: "postId",
+    ref: "Comment",
+    justOne: true
 });
 exports.PostModel = mongoose_1.models.Post || (0, mongoose_1.model)("Post", postSchema);

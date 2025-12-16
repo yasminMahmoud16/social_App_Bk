@@ -8,5 +8,6 @@ exports.endPoints = {
         User_model_1.RoleEnum.admin
     ],
     restore: [User_model_1.RoleEnum.admin],
-    hardDelete: [User_model_1.RoleEnum.admin]
+    hardDelete: [User_model_1.RoleEnum.admin],
+    dashboard: [User_model_1.RoleEnum.admin, User_model_1.RoleEnum.superAdmin]
 };

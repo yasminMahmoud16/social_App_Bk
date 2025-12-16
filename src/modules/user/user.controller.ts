@@ -6,9 +6,10 @@ import * as validators  from "./user.validation";
 import { TokenEnum } from "../../utils/security/token.security";
 import { cloudMulter, fileValidation, StorageEnum } from "../../utils/multer/cloud.multer";
 import { endPoints } from "./user.authorization";
+import { chatRouter } from "../chat";
 
 const router = Router();
-
+router.use("/:userId/chat", chatRouter)
 router.get('/',authentication(),userServices.profile);
 router.patch('/', authentication(),
     validation(validators.updateBasicProfileInfo)
@@ -39,5 +40,23 @@ router.delete('/:userId/hard-delete-account', authorization(endPoints.hardDelete
 
 router.get('/two-step-verification',authentication(),userServices.twoStepVerification);
 router.patch('/verify-two-step-verification',authentication(),userServices.verifyTwoStepVerification);
+
+
+
+// dashboard 
+router.get('/dashboard', authorization(endPoints.dashboard), userServices.dashboard);
+router.patch('/:userId/change-role', authentication(), validation(validators.changeRole), userServices.changeRole);
+// friend 
+router.post('/:userId/friend-request', authentication(), validation(validators.sendFriendRequest), userServices.sendFriendRequest);
+router.delete('/:friendRequestId/delete-friend-request', authentication(), validation(validators.deleteFriendRequest), userServices.deleteFriendRequest);
+router.patch('/accept-friend-request/:requestId', authentication(), validation(validators.acceptFriendRequest), userServices.acceptFriendRequest);
+router.patch('/:friendId/unFriend', authentication(), validation(validators.unFriend), userServices.unFriend);
+router.delete('/:userId/block-user', authentication(), validation(validators.blockUser), userServices.blockUser);
+router.post('/unblock-user', authentication(),
+    // validation(validators.blockUser),
+    userServices.unblockRequest);
+router.patch('/:userId/accept-unblock-user-request', authentication(),
+    // validation(validators.blockUser),
+    userServices.acceptUnblockRequest);
 
 export default router;

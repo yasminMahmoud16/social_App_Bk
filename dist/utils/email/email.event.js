@@ -65,3 +65,23 @@ exports.emailEvent.on("send-tag-mentioned", async (data) => {
         console.log(`Fail to send email`, error);
     }
 });
+exports.emailEvent.on("unblock-request", async (data) => {
+    try {
+        data.subject = "unblock-request";
+        data.html = (0, verify_templet_email_1.verifyEmail)({ title: "unblock-request ", userMessage: data.userMessage, userEmail: data.userEmail });
+        await (0, send_email_1.sendEmail)(data);
+    }
+    catch (error) {
+        console.log(`Fail to send email`, error);
+    }
+});
+exports.emailEvent.on("accept-unblock-request", async (data) => {
+    try {
+        data.subject = "accept-unblock-request";
+        data.html = (0, verify_templet_email_1.verifyEmail)({ title: "accept-unblock-request", adminMessage: data.adminMessage, userEmail: data.userEmail });
+        await (0, send_email_1.sendEmail)(data);
+    }
+    catch (error) {
+        console.log(`Fail to send email`, error);
+    }
+});

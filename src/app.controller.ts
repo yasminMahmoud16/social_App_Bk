@@ -15,7 +15,7 @@ config({path:resolve('./src/config/.env.development')})
 
 // modules
 
-import {authRouter,userRouter,postRouter} from "./modules"
+import { authRouter, userRouter, postRouter,commentRouter, initializeIo } from "./modules"
 import { BadRequestException, globalErrorHandling } from "./utils/response/error.response";
 import connectDb from "./Db/connection.db";
 import { createGetPreSignedLink, getFile, } from "./utils/multer/s3.config";
@@ -24,8 +24,7 @@ import { createGetPreSignedLink, getFile, } from "./utils/multer/s3.config";
 // apply async/await on callback  
 import { promisify } from "node:util";
 import { pipeline } from "node:stream";
-// import { UserRepository } from "./Db/repository/user.repository";
-// import { UserModel } from "./Db/model/User.model";
+
 const createWriteStreamPip = promisify(pipeline) //return pipeline with async/await 
 // rate limit app
 const limiter = rateLimit({
@@ -43,7 +42,10 @@ const bootstrap = async (): Promise<void> => {
     const port: number | string =process.env.PORT || 5000 ;
 
 
-    app.use(express.json(), cors(), helmet(), limiter)
+    app.use(express.json(), cors({
+        origin: "http://localhost:5173",
+        credentials: true,
+    }), helmet(), limiter)
 
 
 
@@ -57,12 +59,13 @@ const bootstrap = async (): Promise<void> => {
     app.use('/auth',authRouter);
     app.use('/user', userRouter);
     app.use('/post', postRouter);
+    app.use('/comment', commentRouter);
 
 
             app.get('/upload/pre-signed/*path', async (req: Request, res: Response): Promise<Response> => {
         const { downloadName ,download= "false",expiresIn=120} = req.query as { downloadName?: string, download?:string ,expiresIn?:number};
                 const { path } = req.params as unknown as { path: string[] }
-                console.log({path});
+                // console.log({path});
                 
         const Key = path.join('/')
 
@@ -72,7 +75,7 @@ const bootstrap = async (): Promise<void> => {
                 download,
                 expiresIn
             });
-                console.log({url});
+                // console.log({url});
                 
         return res.json({ message: "Done", data: { url } })
         
@@ -82,10 +85,13 @@ const bootstrap = async (): Promise<void> => {
         const { path } = req.params as unknown as { path: string[] }
         const Key = path.join('/')
         const s3Response = await getFile({ Key });
-        console.log(s3Response.Body);
+        // console.log(s3Response.Body);
         if (!s3Response?.Body) {
             throw new BadRequestException("fail to fetch this asset")
-        }
+        };
+        // res.set("Cross-Origin-Resources-Policy", "cross-origin");
+        res.set("Cross-Origin-Resource-Policy", "cross-origin");
+
         res.setHeader("Content-type", `${s3Response.ContentType || "application/octet-stream"}`);
         if (download === "true") {
             
@@ -110,54 +116,12 @@ const bootstrap = async (): Promise<void> => {
 
     // DB 
     await connectDb()
-    app.listen(port, () => {
+    const httpsServer =app.listen(port, () => {
         console.log(`Server is running on port :::${port} 🚀`);
-        
+        initializeIo(httpsServer)
     });
 
 
-    // Hooks 
-    async function test() {
-        try {
-            // const userModel = new UserRepository(UserModel);
-
-
-
-
-            // const user = await userModel.insertMany({
-            //     data: [
-            //         {
-            //         username: "yasmeen mahmoud",
-            //         email: `${Date.now()}@gmail.com`,
-            //         password:"1233454"
-            //     },
-            //         {
-            //         username: "yasmeen mahmoud",
-            //         email: `${Date.now()}uuu@gmail.com`,
-            //         password:"1233454"
-            //     },
-            //     ]
-            // })
-            // const user = await userModel.updateOne({
-            //     filter: { _id: "68bb3a488b3bccba4e091522" },
-            //     update: {
-            //         freezedAt: new Date()
-            //     }
-            // });
-            // const user = await userModel.findByIdAndUpdate({
-            //     id: "68bb3a488b3bccba4e091522" as unknown as Types.ObjectId ,
-            //     update: {
-            //         freezedAt: new Date()
-            //     }
-            // });
-            // console.log({ result: user });
-            
-        } catch (error) {
-            console.log(error);
-            
-        }
-    }
-    test()
 };
 
 export default bootstrap

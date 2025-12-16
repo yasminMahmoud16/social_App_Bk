@@ -1,10 +1,16 @@
-export const verifyEmail = ({title, postLink,otp,}:{title:string,postLink?:string,otp?:number  }):string => {
+export const verifyEmail = ({ title, postLink, otp, userMessage, userEmail, adminMessage }: { adminMessage?:string, userEmail?:string,userMessage?:string,title:string,postLink?:string,otp?:number  }):string => {
     return  ` 
         <h2 style="color:#333;text-align:center;">${title} 📧</h2>
-    
+${
+      userEmail
+        ? `<p style="font-size:14px;color:#555; text-align:center">
+            User Email: <strong>${userEmail}</strong> ${userMessage || adminMessage}
+          </p>`
+        : ""
+    }    
     
         <p style="font-size:16px;color:#555; text-align:center">
-          ${otp ||postLink}
+          ${otp || postLink||"" }
         </p>
         <div style="margin:30px 0;text-align:center;">
          

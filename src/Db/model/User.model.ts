@@ -14,7 +14,8 @@ export enum GenderEnum {
 }
 export enum RoleEnum {
     user = "user",
-    admin = "admin"
+    admin = "admin",
+    superAdmin = "super-admin"
 }
 export enum ProviderEnum {
     GOOGLE = "GOOGLE",
@@ -50,15 +51,18 @@ export interface IUser {
     profileImage?: string;
     tempProfileImage?: string;
     coverImages?: string[];
-
+    
     gender: GenderEnum;
     role: RoleEnum;
     provider: ProviderEnum;
-
+    
     freezedAt: Date
     freezedBy?: Types.ObjectId;
     restoredAt?: Date;
     restoredBy?: Types.ObjectId;
+    friends?: Types.ObjectId[];
+    blockedAt?: Date;
+    unblockRequests?: Types.ObjectId[];
 
 
     verifyTwoStepsOtp?: string;
@@ -112,15 +116,18 @@ const userSchema = new Schema<IUser>(
         profileImage: { type: String },
         tempProfileImage: { type: String },
         coverImages: [String],
-
+        
         gender: { type: String, enum: GenderEnum, default: GenderEnum.male },
         role: { type: String, enum: RoleEnum, default: RoleEnum.user },
         provider: { type: String, enum: ProviderEnum, default: ProviderEnum.SYSTEM },
-
+        
         freezedAt: { type: Date },
         freezedBy: { type: Schema.Types.ObjectId, ref: "User" },
         restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
+        friends: [{ type: Schema.Types.ObjectId, ref: "User" }],
+        unblockRequests: [{ type: Schema.Types.ObjectId, ref: "User" }],
         restoredAt: { type: Date },
+        blockedAt: { type: Date },
         createdAt: { type: Date },
         UpdatedAt: { type: Date },
     },
@@ -214,9 +221,9 @@ userSchema.pre(["findOneAndUpdate", "findOne"], async function (next) {
 
     const update = this.getUpdate() as (UpdateQuery<IUser> & { verifyTwoStepsOtp?: string,  }) | undefined;
 
-    console.log({ update });
-    console.log({ query });
-    console.log({ otp: update?.verifyTwoStepsOtp });
+    // console.log({ update });
+    // console.log({ query });
+    // console.log({ otp: update?.verifyTwoStepsOtp });
     
     if (update?.verifyTwoStepsOtp) {
         update.verifyTwoStepsOtp = await generateHash(update.verifyTwoStepsOtp as string);

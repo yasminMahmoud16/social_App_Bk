@@ -2,6 +2,7 @@ import {z} from "zod"
 import { LogoutEnum } from "../../utils/security/token.security"
 import { generalFields } from "../../middleware/validation.middleware";
 import { Types } from "mongoose";
+import { RoleEnum } from "../../Db/model";
 
 
 export const logout = {
@@ -80,3 +81,41 @@ export const updateBasicProfileInfo =  {
         phone:generalFields.phone
   })
 };
+
+export const sendFriendRequest = {
+  params: z.strictObject({
+    userId: generalFields.id
+  }),
+
+}
+export const deleteFriendRequest = {
+  params: z.strictObject({
+    friendRequestId: generalFields.id
+  }),
+
+}
+export const acceptFriendRequest = {
+  params: z.strictObject({
+    requestId: generalFields.id
+  }),
+
+}
+export const unFriend = {
+  params: z.strictObject({
+    friendId: generalFields.id
+  }),
+
+}
+export const blockUser = {
+  params: z.strictObject({
+    userId: generalFields.id
+  }),
+
+}
+export const changeRole = {
+  params: sendFriendRequest.params,
+  body: z.strictObject({
+    role:z.enum(RoleEnum)
+  })
+}
+

@@ -1,6 +1,6 @@
 import { log } from "console";
 import {connect} from "mongoose"
-import { UserModel } from "./model/User.model";
+import { UserModel } from "./model";
 
 const connectDb =async ():Promise<void> => {
     try {

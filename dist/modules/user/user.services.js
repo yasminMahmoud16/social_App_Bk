@@ -11,17 +11,65 @@ const s3_event_1 = require("../../utils/multer/s3.event");
 const success_response_1 = require("../../utils/response/success.response");
 const encrypt_security_1 = require("../../utils/security/encrypt.security");
 const repository_1 = require("../../Db/repository");
+const model_1 = require("../../Db/model");
 class UserServices {
     userModel = new repository_1.UserRepository(User_model_1.UserModel);
+    postModel = new repository_1.PostRepository(model_1.PostModel);
+    friendRequestModel = new repository_1.FriendRequestRepository(model_1.FriendRequestModel);
     constructor() { }
     profile = async (req, res) => {
+        const profile = await this.userModel.findById({
+            id: req.user?._id,
+            options: {
+                populate: [{
+                        path: "friends",
+                        select: "firstName lastName email gender profileImage"
+                    }]
+            }
+        });
+        if (!profile) {
+            throw new error_response_1.NotFoundException("Failed to find user profile ");
+        }
         if (!req.user) {
             throw new error_response_1.UnauthorizeException("missing user details ");
         }
         req.user.phone = await (0, encrypt_security_1.decryptEncryption)({ ciphertext: req.user.phone });
         return (0, success_response_1.successResponse)({
             res,
-            data: { user: req.user }
+            data: { user: profile }
+        });
+    };
+    dashboard = async (req, res) => {
+        const result = Promise.allSettled([
+            await this.userModel.find({ filter: {} }),
+            await this.postModel.find({ filter: {} }),
+        ]);
+        return (0, success_response_1.successResponse)({
+            res,
+            data: { result }
+        });
+    };
+    changeRole = async (req, res) => {
+        const { userId } = req.params;
+        const { role } = req.body;
+        const denyRole = [role, User_model_1.RoleEnum.superAdmin];
+        if (req.user?.role === User_model_1.RoleEnum.admin) {
+            denyRole.push(User_model_1.RoleEnum.admin);
+        }
+        const user = await this.userModel.findOneAndUpdate({
+            filter: {
+                _id: userId,
+                role: { $nin: denyRole }
+            },
+            update: {
+                role,
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("failed to find matching result");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
         });
     };
     profileImage = async (req, res) => {
@@ -29,7 +77,7 @@ class UserServices {
         const { url, Key } = await (0, s3_config_1.createPreSignedUploadLink)({
             ContentType,
             Originalname,
-            path: `users/${req.decoded?._id}`
+            path: `users/${req.decoded?._id}`,
         });
         const user = await this.userModel.findByIdAndUpdate({
             id: req.user?._id,
@@ -374,6 +422,228 @@ class UserServices {
         return (0, success_response_1.successResponse)({
             res,
             message: " 2-steps-verification enabled successfully on your account",
+        });
+    };
+    sendFriendRequest = async (req, res) => {
+        const { userId } = req.params;
+        const checkFriendRequest = await this.friendRequestModel.findOne({
+            filter: {
+                createdBy: { $in: [req.user?._id, userId] },
+                sendTo: { $in: [req.user?._id, userId] },
+            }
+        });
+        if (checkFriendRequest) {
+            throw new error_response_1.ConflictException("Friend request already exists ");
+        }
+        const user = await this.userModel.findOne({
+            filter: {
+                _id: userId,
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("User is not found");
+        }
+        ;
+        const [friendRequest] = (await this.friendRequestModel.create({
+            data: [{
+                    createdBy: req.user?._id,
+                    sendTo: userId
+                }]
+        })) || [];
+        if (!friendRequest) {
+            throw new error_response_1.BadRequestException("Something went wrong !!!");
+        }
+        ;
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201
+        });
+    };
+    deleteFriendRequest = async (req, res) => {
+        const { friendRequestId } = req.params;
+        const checkFriendRequest = await this.friendRequestModel.findOne({
+            filter: {
+                _id: friendRequestId,
+                acceptedAt: { $exists: false }
+            }
+        });
+        if (!checkFriendRequest) {
+            throw new error_response_1.NotFoundException("Friend request not found ");
+        }
+        const deleteFriendRequest = await this.friendRequestModel.deleteOne({
+            filter: { _id: friendRequestId }
+        });
+        if (!deleteFriendRequest) {
+            throw new error_response_1.BadRequestException("Something went wrong !!!");
+        }
+        ;
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    unFriend = async (req, res) => {
+        const { friendId } = req.params;
+        const checkFriendExists = await this.userModel.findOne({
+            filter: {
+                _id: req.user?._id,
+                friends: friendId
+            }
+        });
+        if (!checkFriendExists) {
+            throw new error_response_1.NotFoundException("Friend not found ");
+        }
+        const unFriendUser = await this.userModel.updateOne({
+            filter: { _id: req.user?._id },
+            update: {
+                $pull: { friends: friendId }
+            }
+        });
+        if (!unFriendUser) {
+            throw new error_response_1.BadRequestException("Something went wrong !!!");
+        }
+        ;
+        return (0, success_response_1.successResponse)({
+            res,
+            message: "unfriend user"
+        });
+    };
+    acceptFriendRequest = async (req, res) => {
+        const { requestId } = req.params;
+        const acceptFriendRequest = await this.friendRequestModel.findOneAndUpdate({
+            filter: {
+                _id: requestId,
+                sendTo: req.user?._id,
+                acceptedAt: { $exists: false }
+            },
+            update: {
+                acceptedAt: new Date(),
+            }
+        });
+        if (!acceptFriendRequest) {
+            throw new error_response_1.NotFoundException("Failed to find matching result ");
+        }
+        await Promise.all([
+            await this.userModel.updateOne({
+                filter: { _id: acceptFriendRequest.createdBy },
+                update: {
+                    $addToSet: { friends: acceptFriendRequest.sendTo }
+                }
+            }),
+            await this.userModel.updateOne({
+                filter: { _id: acceptFriendRequest.sendTo },
+                update: {
+                    $addToSet: { friends: acceptFriendRequest.createdBy }
+                }
+            })
+        ]);
+        console.log({
+            promise: await Promise.all([
+                await this.userModel.updateOne({
+                    filter: { _id: acceptFriendRequest.createdBy },
+                    update: {
+                        $addToSet: { friends: acceptFriendRequest.sendTo }
+                    }
+                }),
+                await this.userModel.updateOne({
+                    filter: { _id: acceptFriendRequest.sendTo },
+                    update: {
+                        $addToSet: { friends: acceptFriendRequest.createdBy }
+                    }
+                })
+            ])
+        });
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    blockUser = async (req, res) => {
+        const { userId } = req.params;
+        if (req.user?.role != User_model_1.RoleEnum.admin) {
+            throw new error_response_1.UnauthorizeException("Not authorized user only admins allowed");
+        }
+        const user = await this.userModel.findOne({
+            filter: {
+                _id: userId,
+                blockedAt: { $exists: false }
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("user not found ");
+        }
+        const blockUser = await this.userModel.updateOne({
+            filter: { _id: userId },
+            update: { blockedAt: new Date() }
+        });
+        if (blockUser.modifiedCount === 0) {
+            throw new error_response_1.BadRequestException("Something went wrong !!!");
+        }
+        ;
+        return (0, success_response_1.successResponse)({
+            res,
+            message: "User blocked successfully"
+        });
+    };
+    unblockRequest = async (req, res) => {
+        const { email, unblockMessage } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                blockedAt: { $exists: true }
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("user not found ");
+        }
+        const unblockRequestEmail = email_event_1.emailEvent.emit("unblock-request", {
+            to: process.env.ADMIN_EMAIL,
+            userEmail: email,
+            userMessage: unblockMessage
+        });
+        if (unblockRequestEmail) {
+            await this.userModel.updateOne({
+                filter: { role: User_model_1.RoleEnum.admin },
+                update: {
+                    $addToSet: { unblockRequests: user._id }
+                }
+            });
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+            data: {}
+        });
+    };
+    acceptUnblockRequest = async (req, res) => {
+        const { userId } = req.params;
+        if (req.user?.role != User_model_1.RoleEnum.admin) {
+            throw new error_response_1.UnauthorizeException("Not authorized user only admins allowed");
+        }
+        const user = await this.userModel.findOneAndUpdate({
+            filter: {
+                _id: userId,
+            },
+            update: {
+                $unset: { blockedAt: 1 }
+            },
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("user not found ");
+        }
+        const acceptUnblockRequest = email_event_1.emailEvent.emit("accept-unblock-request", {
+            to: user.email,
+            userEmail: user.email,
+            adminMessage: "Congrats your request accepted by the admin 😊 "
+        });
+        if (acceptUnblockRequest) {
+            await this.userModel.updateOne({
+                filter: { role: User_model_1.RoleEnum.admin },
+                update: {
+                    $pull: { unblockRequests: user._id }
+                }
+            });
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+            data: {}
         });
     };
 }

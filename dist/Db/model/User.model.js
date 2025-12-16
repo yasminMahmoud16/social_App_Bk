@@ -13,6 +13,7 @@ var RoleEnum;
 (function (RoleEnum) {
     RoleEnum["user"] = "user";
     RoleEnum["admin"] = "admin";
+    RoleEnum["superAdmin"] = "super-admin";
 })(RoleEnum || (exports.RoleEnum = RoleEnum = {}));
 var ProviderEnum;
 (function (ProviderEnum) {
@@ -53,7 +54,10 @@ const userSchema = new mongoose_1.Schema({
     freezedAt: { type: Date },
     freezedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    friends: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
+    unblockRequests: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     restoredAt: { type: Date },
+    blockedAt: { type: Date },
     createdAt: { type: Date },
     UpdatedAt: { type: Date },
 }, {
@@ -101,9 +105,6 @@ userSchema.pre(["find", "findOne"], function (next) {
 userSchema.pre(["findOneAndUpdate", "findOne"], async function (next) {
     const query = this.getQuery();
     const update = this.getUpdate();
-    console.log({ update });
-    console.log({ query });
-    console.log({ otp: update?.verifyTwoStepsOtp });
     if (update?.verifyTwoStepsOtp) {
         update.verifyTwoStepsOtp = await (0, hash_security_1.generateHash)(update.verifyTwoStepsOtp);
     }

@@ -77,15 +77,22 @@ const postSchema = new Schema<IPost>(
 
 
     }, {
-        timestamps:true
+        timestamps: true,
+        strictQuery:true,
+        toObject: {
+            virtuals:true
+        },
+        toJSON: {
+            virtuals:true
+        }
     
 }
 )
 
 // send email with tags 
 postSchema.post("save", async function (doc, next) {
-    console.log({ doc: doc });
-    console.log({this:this});
+    // console.log({ doc: doc });
+    // console.log({this:this});
     // console.log({populated:await doc.populate("tags","email")});
 
     let populated = await doc.populate<{ tags: IUser[] }>({
@@ -107,7 +114,19 @@ postSchema.post("save", async function (doc, next) {
     
     next();
 });
+// check if post freezed 
+postSchema.pre(["findOne", "find", "countDocuments"], async function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query })
+    } else {
 
+        this.setQuery({ ...query, freezedAt: { $exists: false } })
+    }
+    // console.log(this.getQuery());
+
+    next()
+});
 postSchema.pre(["findOneAndUpdate","updateOne"], async function (next) {
         const query = this.getQuery();
     if (query.paranoid === false) {
@@ -118,5 +137,12 @@ postSchema.pre(["findOneAndUpdate","updateOne"], async function (next) {
     }
     next()
 });
+
+postSchema.virtual("comments", {
+    localField: "_id",
+    foreignField: "postId",
+    ref: "Comment",
+    justOne:true
+})
 export const PostModel = models.Post || model<IPost>("Post", postSchema); 
 export type HPostDocument = HydratedDocument<IPost>;

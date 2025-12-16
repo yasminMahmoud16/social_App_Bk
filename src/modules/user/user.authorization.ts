@@ -6,5 +6,6 @@ export const endPoints = {
         RoleEnum.admin
     ],
     restore:[RoleEnum.admin],
-    hardDelete:[RoleEnum.admin]
+    hardDelete: [RoleEnum.admin],
+    dashboard:[RoleEnum.admin , RoleEnum.superAdmin]
 }

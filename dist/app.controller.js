@@ -26,7 +26,10 @@ const limiter = (0, express_rate_limit_1.default)({
 const bootstrap = async () => {
     const app = (0, express_1.default)();
     const port = process.env.PORT || 5000;
-    app.use(express_1.default.json(), (0, cors_1.default)(), (0, helmet_1.default)(), limiter);
+    app.use(express_1.default.json(), (0, cors_1.default)({
+        origin: "http://localhost:5173",
+        credentials: true,
+    }), (0, helmet_1.default)(), limiter);
     app.get('/', (req, res) => {
         res.json({
             message: `welcome to ${process.env.APPLICATION_NAME} backend landing page ❤️🌸`
@@ -35,10 +38,10 @@ const bootstrap = async () => {
     app.use('/auth', modules_1.authRouter);
     app.use('/user', modules_1.userRouter);
     app.use('/post', modules_1.postRouter);
+    app.use('/comment', modules_1.commentRouter);
     app.get('/upload/pre-signed/*path', async (req, res) => {
         const { downloadName, download = "false", expiresIn = 120 } = req.query;
         const { path } = req.params;
-        console.log({ path });
         const Key = path.join('/');
         const url = await (0, s3_config_1.createGetPreSignedLink)({
             Key,
@@ -46,7 +49,6 @@ const bootstrap = async () => {
             download,
             expiresIn
         });
-        console.log({ url });
         return res.json({ message: "Done", data: { url } });
     });
     app.get('/upload/*path', async (req, res) => {
@@ -54,10 +56,11 @@ const bootstrap = async () => {
         const { path } = req.params;
         const Key = path.join('/');
         const s3Response = await (0, s3_config_1.getFile)({ Key });
-        console.log(s3Response.Body);
         if (!s3Response?.Body) {
             throw new error_response_1.BadRequestException("fail to fetch this asset");
         }
+        ;
+        res.set("Cross-Origin-Resource-Policy", "cross-origin");
         res.setHeader("Content-type", `${s3Response.ContentType || "application/octet-stream"}`);
         if (download === "true") {
             res.setHeader("Content-Disposition", `attachment; filename="${downloadName || Key.split("/").pop()}"`);
@@ -71,16 +74,9 @@ const bootstrap = async () => {
     });
     app.use(error_response_1.globalErrorHandling);
     await (0, connection_db_1.default)();
-    app.listen(port, () => {
+    const httpsServer = app.listen(port, () => {
         console.log(`Server is running on port :::${port} 🚀`);
+        (0, modules_1.initializeIo)(httpsServer);
     });
-    async function test() {
-        try {
-        }
-        catch (error) {
-            console.log(error);
-        }
-    }
-    test();
 };
 exports.default = bootstrap;

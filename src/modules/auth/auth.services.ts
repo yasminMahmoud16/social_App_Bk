@@ -117,11 +117,13 @@ class AuthenticationServices {
         const user = await this.userModel.findOne({
             filter: {
                 email,
-                provider: ProviderEnum.SYSTEM
+                provider: ProviderEnum.SYSTEM,
+                blockedAt:{$exists:false}
             }
         });
+
         if (!user) {
-            throw new NotFoundException("In-valid login data")
+            throw new NotFoundException("In-valid login data or you were blocked by the admin, please send an unblock request to admin")
         };
 
         if (!user.confirmedAt) {

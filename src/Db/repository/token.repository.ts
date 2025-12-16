@@ -1,5 +1,5 @@
 import {  Model } from "mongoose";
-import { IToken as TDocument} from "../model/token.model";
+import { IToken as TDocument} from "../model";
 import { DatabaseRepository } from "./database.repository";
 
 export class TokenRepository extends DatabaseRepository<TDocument> {

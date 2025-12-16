@@ -32,7 +32,8 @@ export const cloudMulter = (
         }): multer.Multer => {
     // console.log(os.tmpdir());
     
-    const storage = storageApproach === StorageEnum.memory ? multer.memoryStorage() : multer.diskStorage({
+    const storage =
+        storageApproach === StorageEnum.memory ? multer.memoryStorage() : multer.diskStorage({
         // destination takes temp path
         destination: os.tmpdir(),
         filename: function (req: Request, file: Express.Multer.File, callBack){
